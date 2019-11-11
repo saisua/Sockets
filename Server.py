@@ -2,27 +2,31 @@ import socket, logging, datetime
 import xmlrpc
 from multiprocessing import Process, Manager
 from Servers import *
+from os import listdir
 
 def main():
-    logging.error("This file should not be executed directly")
+    serv = Server()
+    tcp = serv.open('TCP','')
+    serv.test(tcp)
     
 class Server():
-    def __init__(self, ip:str=None, port:tuple[int]=(12412,), max_connections:int=-1,
+    def __init__(self, ip:str=None, port:tuple=12412, max_connections:int=-1,
                         order_dict:dict={}, listen_timeout:float=30, threaded:bool=True,
-                        servers:dict["TCP":["Listen","Send"], 
-                        "UDP":["Listen","Send"], "RCP":["Listen","Send"]]={"TCP":["Send"],"UDP":[],"RCP":[]}):
+                        servers:"dict['Serv_type':['Listen','Send']"={'TCP':['Send']}):
         logging.debug(f"Server.__init__(self, {ip}, {port}, {max_connections})")
         self.threaded = threaded
         
         self.__manager = Manager()
         self._client_from_addr = self.__manager.dict()
         self._process_from_addr = {}
-        self.open = self.__manager.dict()
+        self.__open = self.__manager.dict()
         
-        self.order_dict = {**order_dict, "--_ping":self.ping}
+        self.order_dict = {**order_dict}
         self.next_server = self.__manager.list()
 
         self.servers = self.__manager.dict(servers)
+        self.__servers = {}
+        self.__servers_by_str = dict([[mod[:-3],eval(f"{mod[:-3]}.{mod[:-3]}")] for mod in listdir(f"{__file__[:-9]}Servers") if mod[-3:] == '.py'][:-1])
 
         self.clients_new_server = self.__manager.dict()
 
@@ -44,6 +48,27 @@ class Server():
         self._connection.bind((ip, port))
 
         self.listen_timeout = listen_timeout
-        logging.info("Created new server")
+        logging.info("Created new server manager")
 
+    def open(self, server_type:str, started_in:str):
+        return self.__servers_by_str[server_type]()
         
+    def test(self,serv):
+        print(f"port:{serv.port}")
+        addr = serv.open()
+        listener = serv.create_listener(addr,
+                        serv._client_from_addr[addr])
+        messages = next(listener)
+        while(messages and messages != '\r\n'): 
+            print(f"Recieved {messages}")
+            serv.sendto(messages,addr)
+            messages = next(listener)
+        print('hi')
+        serv.join()
+        print('wsup')
+        serv.close()
+
+        print("byee")
+
+if __name__ == "__main__":
+    main()

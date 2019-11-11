@@ -1,44 +1,92 @@
 import socket
-from multiprocessing import Manager
+from multithr import Process
+from Languages.Server_lang import lang
 
 def main():
-    pass
+    with TCP() as serv:
+        pass
 
 class TCP():
-    def __init__(self, ip:str="localhost", port:int=12412, locks:tuple["Lock"]=()):
+    def __init__(self, ip:str="localhost", port:int=0, server:"Server"=None, *, 
+                        locks:tuple=(), max_clients:int=1):
         self.ip = str(ip)
         self.port = int(port)
 
-        self.locks = locks
+        self._server = server
+        self._manager = server.__manager if not server is None else None
 
-        socket.AF_
+        self.locks = locks
 
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._socket.bind((self.ip, self.port))
+        self.port = self._socket.getsockname()[1]
+
+        self.max_clients = int(max_clients)
+        self._client_from_addr = {}
+
+        self.__open = {'':False}
+
+        self.open_processes = []
+
+        self.__test = True
+
+    def __del__(self):
+        self.close()
+
+    # Shared functions
 
     def __enter__(self):
+        self.open()
         return self
 
-    def __close__(self):
-        pass
+    def __exit__(self, _, __, ___):
+        self.close()
+
+    def open(self):
+        self.__open[''] = True
+        if(self.__test): return self.listen_connections(1,self.ip,self.port)
+        else:
+            open_process = Process(target=self.listen_max_conn, args=(self.ip,self.port), daemon=True)
+            self.open_processes.append(open_process)
+            open_process.start()
+
+    def close(self):
+        self.__open[''] = False
+
+        self.join()
+        self._socket.close()
+
+    def join(self):
+        for proc in self.open_processes: proc.join()
+
+    def ping(self, addr:tuple, send_time:str=None) -> None:
+        if(send_time is None):
+            self.client.sendto("--_ping",addr)
+            self.listen(addr)
+
+    # TCP functions
+
+    def listen_max_conn(self, ip:str=None, port:int=None):
+        while(len(self._client_from_addr) < self.max_clients):
+            remaining = self.max_clients-len(self._client_from_addr)
+            self.listen_connections(2 if remaining>1 else remaining, ip, port)
 
     def listen_connections(self, connections:int=1, ip:str=None, port:int=None):
-        if(ip is None): ip = self.ip
-        if(port is None): port = self.port
-        else: self.port = int(port)
-            
-        if(self.threaded):
-            process = [] #miau
+        if(not self.__open['']): return
+        
+        if(self.__test): return self.new_connection(ip, port)
+        else:
+            process = [] 
             for _ in range(connections):
                 process.append(Process(target=self.new_connection, args=(ip, port)))
                 
                 process[-1].start()
                 
             for conn in process: conn.join()
-        else: self.new_connection(ip, port)
     
     def new_connection(self, ip:str=None, port:int=None):
-        if(self.max_connections + 1 and len(self._client_from_addr) >= self.max_connections): return
+        if(self.max_clients + 1 and len(self._client_from_addr) >= self.max_clients): return
+        if(not self.__open['']): return
     
         if(ip is None): ip = self.ip
         if(port is None): port = self.port
@@ -47,24 +95,10 @@ class TCP():
             
         listener, addr = self._socket.accept()
         
-        logging.info(f"Connected new user: {addr}")
-        
         self._client_from_addr[addr] = listener
-        self.open[addr] = True
+        self.__open[addr] = True
 
-        lock = self.__manager.Lock()
-        lock.acquire()
-
-        if(self.threaded):
-            self._process_from_addr[addr] = Process(target=self.listen, args=(addr, listener, lock), daemon=True)
-            self._process_from_addr[addr].start()
-        else: self.listen(addr,listener)
-    
-        tmp_fname(addr, lock)
-
-    def tmp_fname(self, addr:tuple, lock:Lock):
-        lock.release()
-        while(self.open[addr]): pass
+        if(self.__test): return addr
 
     def sendto(self, message:str, addr:tuple):
         self._client_from_addr[addr].sendto(bytes(str(message), "utf-8"), addr)
@@ -72,33 +106,31 @@ class TCP():
     def sendall(self, message:str):
         self._socket.sendall(bytes(str(message), "utf-8"))
     
-    def listen(self, addr, listener, lock:Lock):
-        logging.debug("Client.listen(self)")
-        if(not self.open[addr]): return
+    def create_listener(self, addr, listener):
+        if(self.__open[''] and not self.__open[addr]): return
         
         with listener:
             timeout = 0
-            while(self.open[addr]):
-                lock.acquire()
+            while(self.__open[''] and self.__open[addr]):
+                #lock.acquire()
                 data = listener.recv(1024)
                 decoded_data = data.decode("utf-8")
 
                 if(data is None):
                     timeout += 1
-                    logging.debug(f"Timeout of user {addr} increased to {timeout}")
+                    #logging.debug(f"Timeout of user {addr} increased to {timeout}")
                     if(timeout > 9): 
-                        logging.warning(f"User {addr} has disconnected")
+                        #logging.warning(f"User {addr} has disconnected")
                         break
                 elif(decoded_data != ''):
                     timeout = 0
-                    logging.info(f"Recived data '{decoded_data}' from address {addr}")
+                    #logging.info(f"Recived data '{decoded_data}' from address {addr}")
                     
-                    lock.release()
                     yield decoded_data
 
         del self._process_from_addr[addr]
         del self._client_from_addr[addr]
-        del self.open[addr]
+        del self.__open[addr]
                                             
     def parse_data(self, data:str, addr:str):
         #print(f"parse_data {data}")
@@ -125,10 +157,6 @@ class TCP():
                 order(*args)
             except Exception as err: print(f"ERROR: {err}")
 
-    def ping(self, addr:tuple, send_time:str=None) -> None:
-        if(send_time is None):
-            self.client.sendto("--_ping",addr)
-            self.listen(addr)
-
 if __name__ == "__main__":
     main()
+else: print("Imported TCP Server")

@@ -1,32 +1,42 @@
 import socket
 import logging
 import time, datetime
-import wmi
-from itertools import finditer
+#import wmi
+from re import finditer
+from Languages.Server_lang import lang
+from multiprocessing import Manager
 
 try:
     import Server
 except ImportError: pass
 
 def main():
-    return
     import sys
-    #multiprocessing_logging.install_mp_handler()
     logging.basicConfig(format="%(asctime)s %(levelname)s | %(message)s", level=logging.DEBUG)
-    cl = Client()
-    cl.connect(sys.argv[1], 12412)
+    cl = Client({})
+    ip = input("ip: ")
+    port = input("port: ")
+    listener = cl.connect(ip if ip else 'localhost', 
+                port if port else 12412)
+
+    messages = input("Send:\n> ")
+    while(messages and messages != '\r\n'):
+        cl.send_to_server(messages)
+        print(next(listener))
+        messages = input("> ")
 
 class Client():
-    def __init__(self, order_dict:dict, conn_symbols:dict):
+    def __init__(self, order_dict:dict):
         logging.debug(f"Client.__init__(self)")
         logging.info("Created new client")
         self.listener = None
         self.server = None
 
         self.order_dict = order_dict
-        self.conn_symbols = conn_symbols
 
-        self.conn_step = [conn_symbols['Serv_to_Client']]
+        self.conn_step = [lang.Serv_to_Client]
+
+        self.__manager = Manager()
      
         try:
             Server.Process(target=lambda x: x, args=(1))
@@ -34,6 +44,7 @@ class Client():
         except Exception:
             self.__can_be_server = False
 
+        self.next_server = self.__manager.list()
 
     def connect(self, ip:str, port:int=12412):
         logging.debug(f"Client.connect(self, {ip}, {port})")
@@ -76,7 +87,7 @@ class Client():
         #print(f"data_parse {data}")
         order = None
         args = ()
-        for arg in data.split(';'):
+        for arg in data.split(lang.Divisor):
             new_ord = self.order_dict.get(arg.strip(), None)
             print(f"arg:{arg}, new_ord:{new_ord}")
             if(not new_ord is None):
@@ -105,7 +116,7 @@ class Client():
         urgent = False
         num = 0 
         for symbol in finditer('|'.join(self.conn_symbols.values()), command):
-            if(symbol.group(0) == self.conn_symbols["Urgency"]):
+            if(symbol.group(0) == self.lang.Urgency):
                 urgent = True
             else:
                 if(urgent):
