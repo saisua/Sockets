@@ -1,4 +1,4 @@
-import socket
+import socket, datetime
 from multithr import Process
 from Languages.Server_lang import lang
 
@@ -7,13 +7,13 @@ def main():
         pass
 
 class TCP():
-    def __init__(self, ip:str="localhost", port:int=0, server:"Server"=None, *, 
+    def __init__(self, ip:str="localhost", port:int=0, server:"Server"=None, state:str="Listen", *, 
                         locks:tuple=(), max_clients:int=1):
         self.ip = str(ip)
         self.port = int(port)
 
         self._server = server
-        self._manager = server.__manager if not server is None else None
+        self._manager = server._manager if not server is None else None
 
         self.locks = locks
 
@@ -26,9 +26,14 @@ class TCP():
 
         self.__open = {'':False}
 
+        self.state = state
+        self.__order = [lang.Serv_listen if state.lower() == "listen" else lang.Serv_send]
+
         self.open_processes = []
 
         self.__test = True
+
+        self._listener_by_addr = {}
 
     def __del__(self):
         self.close()
@@ -59,12 +64,26 @@ class TCP():
     def join(self):
         for proc in self.open_processes: proc.join()
 
-    def ping(self, addr:tuple, send_time:str=None) -> None:
-        if(send_time is None):
-            self.client.sendto("--_ping",addr)
-            self.listen(addr)
+    def ping(self, addr:tuple) -> None:
+        send_time = datetime.datetime.now()
+        self.sendto("--_ping"+"0"*967,addr)
+        self.listen(addr)
+        return datetime.datetime.now()-send_time
+
+    def bind_to(self, ip:str="localhost", port:int=0):
+        self.close()
+
+        self.port = int(port)
+        
+        for addr in self._client_from_addr.keys():
+            self.sendto(f"--_recon;{ip};{port}")
+
+        self.open()
 
     # TCP functions
+
+    def listen(self, addr:tuple):
+        return next(self._listener_by_addr[addr])
 
     def listen_max_conn(self, ip:str=None, port:int=None):
         while(len(self._client_from_addr) < self.max_clients):
@@ -96,9 +115,10 @@ class TCP():
         listener, addr = self._socket.accept()
         
         self._client_from_addr[addr] = listener
+        self._listener_by_addr[addr] = self.create_listener(addr, listener)
         self.__open[addr] = True
 
-        if(self.__test): return addr
+        if(self.__test): return str(self.ping(addr))
 
     def sendto(self, message:str, addr:tuple):
         self._client_from_addr[addr].sendto(bytes(str(message), "utf-8"), addr)

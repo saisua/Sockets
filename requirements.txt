@@ -1,1 +1,1 @@
-wmi
+psutil # System detection

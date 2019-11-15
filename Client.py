@@ -2,6 +2,7 @@ import socket
 import logging
 import time, datetime
 #import wmi
+import psutil, platform
 from re import finditer
 from Languages.Server_lang import lang
 from multiprocessing import Manager
@@ -19,20 +20,21 @@ def main():
     listener = cl.connect(ip if ip else 'localhost', 
                 port if port else 12412)
 
-    messages = input("Send:\n> ")
-    while(messages and messages != '\r\n'):
-        cl.send_to_server(messages)
-        print(next(listener))
-        messages = input("> ")
+    cl.data_parse(next(listener))
 
 class Client():
-    def __init__(self, order_dict:dict):
+    def __init__(self, ip:str="localhost", port:int=12412, order_dict:dict={}):
         logging.debug(f"Client.__init__(self)")
         logging.info("Created new client")
         self.listener = None
-        self.server = None
+        self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-        self.order_dict = order_dict
+        self.ip = ip
+        self.port = port
+
+        self.order_dict = {**order_dict,
+                "--_ping":self.ping,"--_recon":self.change_server
+                }
 
         self.conn_step = [lang.Serv_to_Client]
 
@@ -46,27 +48,35 @@ class Client():
 
         self.next_server = self.__manager.list()
 
-    def connect(self, ip:str, port:int=12412):
+    def connect(self, ip:str=None, port:int=None):
+        if(ip is None): ip = self.ip
+        if(port is None): port = self.port
         logging.debug(f"Client.connect(self, {ip}, {port})")
-        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         while(True):
             try:
-                server.connect((ip, int(port)))
+                self.server.connect((ip, int(port)))
                 break
             except ConnectionRefusedError: pass
 
-        self.server = server
-        logging.info(f"Connected to personal port in {ip}:{port}")
+        logging.info(f"Connected to server in {ip}:{port}")
 
         self.listener = self.listen(server)
 
         return self.listener
 
+    def change_server(self, ip:str, port:int): 
+        self.server.close()
+
+        self.connect(ip, port)
+
+    def send_sys_info(self):
+        self.send_to_server({"ram":psutil.virtual_memory().total,
+                "cpu":platform.processor(),
+                "os":platform.architecture()})
+
     def listen(self, server:socket.socket) -> "generator":
         timeout = 0
-        
-        #server.settimeout(10)
-
+  
         while(True):
             data = server.recv(1024)
             decoded_data = data.decode("utf-8")
@@ -87,7 +97,7 @@ class Client():
         #print(f"data_parse {data}")
         order = None
         args = ()
-        for arg in data.split(lang.Divisor):
+        for arg in data.split(lang.Divider):
             new_ord = self.order_dict.get(arg.strip(), None)
             print(f"arg:{arg}, new_ord:{new_ord}")
             if(not new_ord is None):
@@ -128,7 +138,7 @@ class Client():
       
 
     def ping(self):
-        self.send_to_server(datetime.datetime.now())
+        self.send_to_server("0"*975)
 
 if __name__ == "__main__":
     main()
