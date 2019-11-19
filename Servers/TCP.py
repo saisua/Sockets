@@ -7,7 +7,7 @@ def main():
         pass
 
 class TCP():
-    def __init__(self, ip:str="localhost", port:int=0, server:"Server"=None, state:str="Listen", *, 
+    def __init__(self, identifier:str, ip:str="localhost", port:int=0, server:"Server"=None, *, 
                         locks:tuple=(), max_clients:int=1):
         self.ip = str(ip)
         self.port = int(port)
@@ -20,18 +20,18 @@ class TCP():
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._socket.bind((self.ip, self.port))
         self.port = self._socket.getsockname()[1]
+        self.identifier = identifier
 
         self.max_clients = int(max_clients)
         self._client_from_addr = {}
 
-        self.__open = {'':False}
+        self._open = {'':False}
 
-        self.state = state
-        self.__order = [lang.Serv_listen if state.lower() == "listen" else lang.Serv_send]
+        self.__order = []
 
         self.open_processes = []
 
-        self.__test = True
+        self.__test = False
 
         self._listener_by_addr = {}
 
@@ -48,7 +48,7 @@ class TCP():
         self.close()
 
     def open(self):
-        self.__open[''] = True
+        self._open[''] = True
         if(self.__test): return self.listen_connections(1,self.ip,self.port)
         else:
             open_process = Process(target=self.listen_max_conn, args=(self.ip,self.port), daemon=True)
@@ -56,7 +56,7 @@ class TCP():
             open_process.start()
 
     def close(self):
-        self.__open[''] = False
+        self._open[''] = False
 
         self.join()
         self._socket.close()
@@ -66,19 +66,15 @@ class TCP():
 
     def ping(self, addr:tuple) -> None:
         send_time = datetime.datetime.now()
-        self.sendto("--_ping"+"0"*967,addr)
+        self.sendto("--_ping;/-/"+"0"*963,addr)
         self.listen(addr)
         return datetime.datetime.now()-send_time
 
     def bind_to(self, ip:str="localhost", port:int=0):
-        self.close()
-
         self.port = int(port)
         
         for addr in self._client_from_addr.keys():
-            self.sendto(f"--_recon;{ip};{port}")
-
-        self.open()
+            self.sendto(f"--_recon;{ip};{port}",addr)
 
     # TCP functions
 
@@ -91,7 +87,7 @@ class TCP():
             self.listen_connections(2 if remaining>1 else remaining, ip, port)
 
     def listen_connections(self, connections:int=1, ip:str=None, port:int=None):
-        if(not self.__open['']): return
+        if(not self._open['']): return
         
         if(self.__test): return self.new_connection(ip, port)
         else:
@@ -105,7 +101,7 @@ class TCP():
     
     def new_connection(self, ip:str=None, port:int=None):
         if(self.max_clients + 1 and len(self._client_from_addr) >= self.max_clients): return
-        if(not self.__open['']): return
+        if(not self._open['']): return
     
         if(ip is None): ip = self.ip
         if(port is None): port = self.port
@@ -116,7 +112,7 @@ class TCP():
         
         self._client_from_addr[addr] = listener
         self._listener_by_addr[addr] = self.create_listener(addr, listener)
-        self.__open[addr] = True
+        self._open[addr] = True
 
         if(self.__test): return str(self.ping(addr))
 
@@ -127,11 +123,11 @@ class TCP():
         self._socket.sendall(bytes(str(message), "utf-8"))
     
     def create_listener(self, addr, listener):
-        if(self.__open[''] and not self.__open[addr]): return
+        if(self._open[''] and not self._open[addr]): return
         
         with listener:
             timeout = 0
-            while(self.__open[''] and self.__open[addr]):
+            while(self._open[''] and self._open[addr]):
                 #lock.acquire()
                 data = listener.recv(1024)
                 decoded_data = data.decode("utf-8")
@@ -150,7 +146,7 @@ class TCP():
 
         del self._process_from_addr[addr]
         del self._client_from_addr[addr]
-        del self.__open[addr]
+        del self._open[addr]
                                             
     def parse_data(self, data:str, addr:str):
         #print(f"parse_data {data}")
@@ -169,7 +165,7 @@ class TCP():
                 order = new_ord
                 args = (addr,)
                 
-            elif(arg.strip() != ''): args+=(arg.strip(),)
+            elif(arg.strip() != '' and not arg.strip().startswith(lang.Comment)): args+=(arg.strip(),)
             
         if(not order is None): 
             print(f"{order}{args}.")
