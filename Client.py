@@ -14,31 +14,44 @@ except ImportError: pass
 def main():
     import sys
     logging.basicConfig(format="%(asctime)s %(levelname)s | %(message)s", level=logging.DEBUG)
-    cl = Client({})
+
     ip = input("ip: ")
     port = input("port: ")
-    cl.connect(ip if ip else 'localhost', 
-                port if port else 12412)
+    protocol = input("protocol: ")
+
+    cl = Client({}, protocol=protocol)
+    
+    
+
+    #cl.connect(ip if ip else 'localhost', 
+     #           port if port else 12412)
 
     #1st ping
-    print("listen1")
-    cl.data_parse(next(cl.listener))
+    #print("listen1")
+    #cl.data_parse(next(cl.listener))
 
     #recon
-    print("listen2")
-    cl.data_parse(next(cl.listener))
+    #print("listen2")
+    #cl.data_parse(next(cl.listener))
 
     #2nd ping
-    print("listen3")
-    cl.data_parse(next(cl.listener))
+    #print("listen3")
+    #cl.data_parse(next(cl.listener))
 
 class Client():
-    def __init__(self, ip:str="localhost", port:int=12412, order_dict:dict={}):
+    def __init__(self, ip:str="localhost", port:int=12412, order_dict:dict={}, protocol="TCP"):
         logging.debug(f"Client.__init__(self)")
         logging.info("Created new client")
         self.listener = None
-        self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.__server_aux = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+        self.protocol = protocol.upper()
+
+        if(self.protocol == "TCP"):
+            self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.__server_aux = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        elif(self.protocol == "RPC"):
+            self.server = xmlrpc.client.ServerProxy(f"http://{ip}:{port}/")
+            self.__server_aux = xmlrpc.client.ServerProxy(f"http://{ip}:{port}")
 
         self.ip = ip
         self.port = port
@@ -50,7 +63,7 @@ class Client():
         self.conn_step = [lang.Serv_to_Client]
 
         self.__manager = Manager()
-     
+
         try:
             Server.Process(target=lambda x: x, args=(1))
             self.__can_be_server = True 

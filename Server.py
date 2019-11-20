@@ -6,10 +6,13 @@ from os import listdir
 from collections import defaultdict
 
 def main():
-    serv = Server(servers={"TCP":['1','2']})
+    serv = Server(servers={"TCP":['1'],"RPC":['2']})
     serv.open_all()
 
     print(serv._servers_by_id)
+    try: 
+        while(1): pass
+    except KeyboardInterrupt: pass
     
 class Server(): 
     def __init__(self, ip:str=None, port:tuple=12412, max_connections:int=-1,
@@ -30,7 +33,7 @@ class Server():
         self.__servers = defaultdict(lambda : [])
         self._servers_by_id = {}
         
-        self.__servers_const_by_str = dict([[mod[:-3],eval(f"{mod[:-3]}.{mod[:-3]}")] for mod in listdir(f"{__file__[:-9]}Servers") if mod[-3:] == '.py'][:-1])
+        self.__servers_const_by_str = dict([[mod[:-3],eval(f"{mod[:-3]}.{mod[:-3]}")] for mod in listdir(f"{__file__[:-9]}Servers") if mod[-3:] == '.py' and mod != "__init__.py"])
         # I know the line above is far from good, but it was the easy way and it will only be execute once
 
         self.clients_new_server = self._manager.dict()
@@ -64,6 +67,7 @@ class Server():
 
     def create_server(self, server_type:str, identifier:str=None, *, force=False):
         if(self.__servers_const_by_str.get(server_type, None) is None): 
+            print(self.__servers_const_by_str)
             raise Exception(f"Server constructor file {server_type}.py not found. Check the input given")
         
         if(identifier is None): 
@@ -102,7 +106,7 @@ class Server():
         new_server =  self.__servers_const_by_str[server_type](ip=self.ip, 
                             port = self.port if identifier == "_router_" or 
                                             (self.servers_len(self.servers) < 2 and
-                                            not len(self._servers_by_id)) else 0,    
+                                            not len(self._servers_by_id)) else self.__get_open_port(),    
                             server=self, identifier=identifier)
 
         self.__servers[server_type].append(new_server)
@@ -135,6 +139,13 @@ class Server():
 
     def create_router_serv(self):
         return self.create_server("TCP","_router_",force=True)
+
+    def __get_open_port(self):
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.bind((self.ip, 0))
+        p = s.getsockname()[1]
+        s.close()
+        return p
 
     def test(self,serv):
         print(f"port:{serv.port}")
