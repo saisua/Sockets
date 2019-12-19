@@ -1,5 +1,6 @@
 import rpyc
 from rpyc import ThreadedServer
+from rpyc.utils.teleportation import export_function,import_function
 import sys
 import time
 
@@ -9,7 +10,7 @@ from multiprocessing import Process
 from Languages.Server_lang import lang
 
 def main():
-    serv = RPC('1',port=12412)
+    serv = RPC('1',ip=input("ip > ")or"localhost",port=12412)
     serv.to_run = cpu
     serv.open()
 
@@ -35,7 +36,7 @@ class RPC(rpyc.Service):
 
         self._run = None
 
-        self.to_run = None
+        self.__to_run = None
         self.args = ()
 
     # Shared functions
@@ -51,12 +52,18 @@ class RPC(rpyc.Service):
         self._socket.start()
         print(f"Open server ({self._socket}) in \n{self.ip}:{self.port}")
 
-
     def exposed_set_run(self, run_funct):
         self._run = run_funct
 
     def exposed_run_run(self):
         self._run(self.to_run, *self.args)
+
+    def get_to_run(self):
+        return self.__to_run
+    def set_to_run(self, new_to_run):
+        self.__to_run = export_function(new_to_run)
+
+    to_run = property(get_to_run, set_to_run)
 
 if __name__ == "__main__":
     main()

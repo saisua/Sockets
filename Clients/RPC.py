@@ -1,4 +1,5 @@
 import rpyc
+from rpyc.utils.teleportation import import_function
 import logging
 
 
@@ -56,7 +57,7 @@ class RPC(rpyc.Service):
         pass
 
     def run(self, funct, *args, **kwargs):
-        return funct(*args, **kwargs)
+        return import_function(funct)(*args, **kwargs)
 
 if __name__ == "__main__":
     main()
