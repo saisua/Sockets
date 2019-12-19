@@ -1,15 +1,18 @@
 import socket, logging, datetime
-import xmlrpc
+import rpyc
 from multiprocessing import Process, Manager
 from Servers import *
 from os import listdir
 from collections import defaultdict
 
 def main():
-    serv = Server(servers={"TCP":['1'],"RPC":['2']})
+    logging.basicConfig(format="%(asctime)s %(levelname)s | %(message)s", level=logging.DEBUG)
+    serv = Server(servers={"RPC":['1']})
     serv.open_all()
 
     print(serv._servers_by_id)
+    input()
+    serv._servers_by_id['1'].test()
     try: 
         while(1): pass
     except KeyboardInterrupt: pass
@@ -22,6 +25,7 @@ class Server():
         self.threaded = threaded
         
         self._manager = Manager()
+        
         self._process_from_serv = {}
         self.__open = self._manager.dict()
         
@@ -117,13 +121,13 @@ class Server():
         
         self._servers_by_id[identifier] = new_server
 
-        return new_server
+        return new_server   
 
     def open(self, server_type:str, identifier:str=None, *, force=False):
         new_server = self._servers_by_id.get(identifier, None)
         if(new_server is None): new_server = self.create_server(server_type, identifier, force=force)
 
-        self._process_from_serv[new_server] = Process(target=new_server.open, daemon=True)
+        self._process_from_serv[new_server] = Process(target=new_server.open)#, daemon=True)
         
         return new_server
         

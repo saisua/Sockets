@@ -1,40 +1,62 @@
-import xmlrpc.server
-from multithr import Process
+import rpyc
+from rpyc import ThreadedServer
+import sys
+import time
+
+sys.path.append(sys.path[0][:-7])
+
+from multiprocessing import Process
 from Languages.Server_lang import lang
 
 def main():
-    pass
+    serv = RPC('1',port=12412)
+    serv.to_run = cpu
+    serv.open()
 
-class RPC():
+def cpu():
+    b = 0
+    for a in range(50000000):
+        b += a
+    return b
+
+class RPC(rpyc.Service):
     def __init__(self, identifier:str, ip:str="localhost", port:int=0, server:"Server"=None):
+        print("RPC.__init__")
         self.ip = str(ip)
         self.port = int(port)
 
         self.server = server
 
+        self._client_from_addr = {}
+
         self.identifier = identifier
 
-        self._socket = xmlrpc.server.SimpleXMLRPCServer((self.ip, self.port), encoding="utf-8")
+        self._socket = None
+
+        self._run = None
+
+        self.to_run = None
+        self.args = ()
 
     # Shared functions
    
     def __enter__(self):
         self.open()
 
-    def open(self):
-        with SimpleXMLRPCServer(("localhost", 8000)) as server:
-            server.register_function(pow)
-            server.register_function(lambda x,y: x+y, 'add')
-            server.register_instance(ExampleService(), allow_dotted_names=True)
-            server.register_multicall_functions()
-            print('Serving XML-RPC on localhost port 8000')
-            try:
-                server.serve_forever()
-            except KeyboardInterrupt:
-                print("\nKeyboard interrupt received")
-
     def __exit__(self):
         pass
+
+    def open(self):
+        self._socket = ThreadedServer(self, hostname=self.ip, port=self.port)
+        self._socket.start()
+        print(f"Open server ({self._socket}) in \n{self.ip}:{self.port}")
+
+
+    def exposed_set_run(self, run_funct):
+        self._run = run_funct
+
+    def exposed_run_run(self):
+        self._run(self.to_run, *self.args)
 
 if __name__ == "__main__":
     main()
