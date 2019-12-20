@@ -4,18 +4,24 @@ from multiprocessing import Process, Manager
 from Servers import *
 from os import listdir
 from collections import defaultdict
+from time import sleep
 
 def main():
     logging.basicConfig(format="%(asctime)s %(levelname)s | %(message)s", level=logging.DEBUG)
     serv = Server(servers={"RPC":['1']})
+    serv._servers_by_id['1'].to_run = cpu
     serv.open_all()
 
     print(serv._servers_by_id)
-    input()
-    serv._servers_by_id['1'].test()
-    try: 
-        while(1): pass
-    except KeyboardInterrupt: pass
+    
+    while(True): sleep(1)
+   
+
+def cpu():
+    b = 0
+    for a in range(50000000):
+        b += a
+    return b
     
 class Server(): 
     def __init__(self, ip:str=None, port:tuple=12412, max_connections:int=-1,
@@ -59,6 +65,11 @@ class Server():
         self.max_connections = int(max_connections) if max_connections >= -1 else -1
 
         self.listen_timeout = listen_timeout
+
+        for server_type,id_list in servers.items():
+            for identifier in id_list:
+                self.create_server(server_type, identifier)
+
         logging.info("Created new server manager")
 
     def __enter__(self):
@@ -127,7 +138,8 @@ class Server():
         new_server = self._servers_by_id.get(identifier, None)
         if(new_server is None): new_server = self.create_server(server_type, identifier, force=force)
 
-        self._process_from_serv[new_server] = Process(target=new_server.open)#, daemon=True)
+        self._process_from_serv[new_server] = Process(target=new_server.open, daemon=True)
+        self._process_from_serv[new_server].start()
         
         return new_server
         
@@ -135,7 +147,7 @@ class Server():
         for sock_type, id_list in self.servers.items():
             for id_ in id_list:
                 by_id = self._servers_by_id.get(id_, None)
-                if by_id is None or not by_id._open['']:
+                if by_id is None and not by_id._open['']:
                     new_server = self.open(sock_type, id_, force=force)
                     print(f"Opened new {sock_type} server in {new_server.port}")
 
