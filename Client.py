@@ -26,6 +26,8 @@ def main():
     cl = Client(ip, port, {}, protocol=protocol)
     cl.open()
 
+    while(input("> ")): pass
+
 
 class Client():
     def __init__(self, ip:str="localhost", port:int=12412, order_dict:dict={}, protocol="TCP"):
