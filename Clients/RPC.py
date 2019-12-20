@@ -1,8 +1,12 @@
 import rpyc
 from rpyc.utils.teleportation import import_function
 import logging
-import time
+from multiprocessing import cpu_count
+import sys
 
+#sys.path.append(sys.path[0][:-7])
+
+from multithr import Process 
 
 def main():
     import sys
@@ -10,9 +14,8 @@ def main():
 
     ip = input("ip: ") or "127.0.0.1"
     port = input("port: ") or 12412
-    protocol = input("protocol: ") or "RPC"
 
-    cl = RPC(ip, port, {}, protocol=protocol)
+    RPC(ip, port)
 
 class RPC(rpyc.Service):
     def __init__(self, ip:str="localhost", port:int=12412, order_dict:dict={},
@@ -32,10 +35,12 @@ class RPC(rpyc.Service):
         self.max_timeout = max_timeout
         self.keepalive = keepalive
 
+        self.__threads = cpu_count()
+
     def __enter__(self):
         self.open()
 
-    def __exit__(self):
+    def __exit__(self,_,__,___):
         self.close()
 
     def open(self):
@@ -48,8 +53,9 @@ class RPC(rpyc.Service):
             except ConnectionRefusedError: pass
 
         self.server.SYNC_REQUEST_TIMEOUT = self.max_timeout
-        self.server.root.set_run(self.run)
-        self.server.root.run_run()
+        self.server.root.set_threads(self.__threads)
+        self.server.root.set_run(self.run, self.run_parall)
+        #self.server.root.run_run()
         print("Connected to the server")
 
     def close(self):
@@ -64,6 +70,18 @@ class RPC(rpyc.Service):
     def run(self, funct, *args, **kwargs):
         print("RPC.run")
         return import_function(funct)(*args, **kwargs)
+
+    def run_parall(self, funct, *args):
+        print("RPC.run_parall")
+        procs = []
+        funct = import_function(funct)
+        for arg in args:
+            procs.append(Process(target=funct, args=arg))
+            procs[-1].start()
+
+        for proc in procs: proc.join()
+
+        return [p._tmp_result for p in procs]
 
 if __name__ == "__main__":
     main()

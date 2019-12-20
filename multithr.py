@@ -8,8 +8,10 @@ class Process(threading.Thread):
 
         self.args = args
 
+        self._tmp_result = None 
+
     def run(self):
-        self.target(*self.args)
+        self._tmp_result = self.target(*self.args)
 
     def __enter__(self, target=None, args:tuple=None):
         if(not target is None): self.target = target
