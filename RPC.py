@@ -77,17 +77,25 @@ class RPC(rpyc.Service):
         print("RPC.run")
         return import_function(funct)(*args, **kwargs)
 
-    def run_parall(self, funct, *args):
+    def run_parall(self, funct, args):
         print("RPC.run_parall")
         procs = []
         funct = import_function(funct)
+
         for arg in args:
             procs.append(Process(target=funct, args=arg))
             procs[-1].start()
+        
+        print(f"Started {len(procs)} process")
 
         for proc in procs: proc.join()
 
-        return [p._tmp_result for p in procs]
+        print("Done")
+
+        a = [p._tmp_result for p in procs]
+        print(a)
+
+        return a 
 
 if __name__ == "__main__":
     main()

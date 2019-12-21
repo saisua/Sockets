@@ -26,7 +26,9 @@ def main():
     cl = Client(ip, port, {}, protocol=protocol)
     cl.open()
 
-    while(input("> ")): pass
+    conn = cl.server.server
+
+    conn.serve_all()
 
 
 class Client():
@@ -64,7 +66,7 @@ class Client():
     def __enter__(self):
         self.open()
 
-    def __exit__(self):
+    def __exit__(self,_,__,___):
         self.close()
 
     def open(self):
