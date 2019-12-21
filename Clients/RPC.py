@@ -1,5 +1,7 @@
 import rpyc
 from rpyc.utils.teleportation import import_function
+from rpyc.utils.helpers import BgServingThread
+
 import logging
 from multiprocessing import cpu_count
 import sys
@@ -19,7 +21,7 @@ def main():
 
 class RPC(rpyc.Service):
     def __init__(self, ip:str="localhost", port:int=12412, order_dict:dict={},
-                    *, max_timeout=600, keepalive:bool=True):
+                    *, max_timeout=600, keepalive:bool=True, keep_background:bool=True):
         logging.debug(f"RPC.__init__(self)")
         logging.info("new RPC client")
 
@@ -34,6 +36,8 @@ class RPC(rpyc.Service):
 
         self.max_timeout = max_timeout
         self.keepalive = keepalive
+
+        self.keep_background = keep_background
 
         self.__threads = cpu_count()
 
@@ -51,6 +55,8 @@ class RPC(rpyc.Service):
                                             keepalive=self.keepalive)
                 break
             except ConnectionRefusedError: pass
+
+        if(self.keep_background): self.keep_background = BgServingThread(self.server)
 
         self.server.SYNC_REQUEST_TIMEOUT = self.max_timeout
         self.server.root.set_threads(self.__threads)
@@ -71,17 +77,25 @@ class RPC(rpyc.Service):
         print("RPC.run")
         return import_function(funct)(*args, **kwargs)
 
-    def run_parall(self, funct, *args):
+    def run_parall(self, funct, args):
         print("RPC.run_parall")
         procs = []
         funct = import_function(funct)
+
         for arg in args:
             procs.append(Process(target=funct, args=arg))
             procs[-1].start()
+        
+        print(f"Started {len(procs)} process")
 
         for proc in procs: proc.join()
 
-        return [p._tmp_result for p in procs]
+        print("Done")
+
+        a = [p._tmp_result for p in procs]
+        print(a)
+
+        return a 
 
 if __name__ == "__main__":
     main()
