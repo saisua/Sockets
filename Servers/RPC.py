@@ -16,27 +16,33 @@ from math import ceil
 def main():
     serv = RPC ('1',ip=input("ip > ")or"localhost",port=12412,start_on_connect=False)
     serv.to_run = cpu
+    serv.args_parall = [[(0, 50000000), (50000000, 100000000), (100000000, 150000000), (150000000, 200000000), (200000000, 250000000), (250000000, 300000000), (300000000, 350000000), (350000000, 400000000)]]
     a = Process(target=serv.open)
     a.start()
 
     input("Press enter to run all clients\n")
-    serv.args_parall = serv.divide_threads([(50000000*i,50000000*(i+1)) for i in range(10)])
+    #serv.args_parall = serv.divide_threads([(50000000*i,50000000*(i+1)) for i in range(10)])
+    #serv.args_per_client = [(50000000*i,50000000*(i+1)) for i in range(10)]
     serv.run_parall()
     
     input("Press enter to finish\n")
 
     print(serv.result)
 
+    exit(0)
+
 def cpu(f,t):
     b = 0
     for a in range(f,t):
         b += a
+
     return b
+
 
 ### This class is a proof of concept
 class RPC(rpyc.Service):
     def __init__(self, identifier:str, ip:str="localhost", port:int=0, server:"Server"=None,
-                *,start_on_connect:bool=True, self_parall:bool=True):
+                *,start_on_connect:bool=True, self_parall:bool=True, max_timeout:int=600):
         print("RPC.__init__")
         self.ip = str(ip)
         self.port = int(port)
@@ -69,6 +75,8 @@ class RPC(rpyc.Service):
 
         self._result = External_list()
 
+        self.max_timeout = max_timeout
+
     # Shared functions
    
     def __enter__(self):
@@ -79,6 +87,8 @@ class RPC(rpyc.Service):
 
     def open(self):
         self._socket = ThreadedServer(self, hostname=self.ip, port=self.port)
+        self._socket.SYNC_REQUEST_TIMEOUT = self.max_timeout
+
         self._socket.start()
         print(f"Open server ({self._socket}) in \n{self.ip}:{self.port}")
 
@@ -107,10 +117,9 @@ class RPC(rpyc.Service):
 
     def exposed_run_run(self):
         if(self._run is None): return -1
-        
+  
         run = rpyc.async_(self._run)
-        self._result.append(run)
-
+        
         if(self._args_per_client is None): 
             future = run(self.to_run, *self._args)
         else:
@@ -121,8 +130,13 @@ class RPC(rpyc.Service):
     def exposed_run_parall(self):
         if(self._run_parall is None): return -1
 
-        future = rpyc.async_(self._run_parall)(self.to_run, self.args_parall[self.__client_num])
+        run = rpyc.async_(self._run_parall) # In a var, as asked in the docs
+        #run = self._run_parall
+
+        future = run(self.to_run, self.args_parall[self.__client_num])
         self._result.append(future)
+
+        #future.wait()
 
         return future
 
@@ -186,7 +200,7 @@ class RPC(rpyc.Service):
         self._args = new_args
 
         for obj in self._clients:
-            obj._args = self._args
+            obj._args = new_args
                 
     def get_args_per_client(self):
         return self._args_per_client
@@ -194,7 +208,7 @@ class RPC(rpyc.Service):
         self._args_per_client = new_args_pc
 
         for obj in self._clients:
-            obj._args_per_client = self._args_per_client
+            obj._args_per_client = new_args_pc
 
     def get_args_parall(self):
         return self._args_parall
@@ -206,7 +220,7 @@ class RPC(rpyc.Service):
 
     to_run = property(get_to_run, set_to_run)
     args = property(get_args,set_args)
-    args_per_client = property(get_args_per_client,set_args)
+    args_per_client = property(get_args_per_client,set_args_per_client)
     args_parall = property(get_args_parall,set_args_parall)
     result = property(result_async_values)
 

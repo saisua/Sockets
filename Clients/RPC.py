@@ -3,15 +3,14 @@ from rpyc.utils.teleportation import import_function
 from rpyc.utils.helpers import BgServingThread
 
 import logging
-from multiprocessing import cpu_count
+from multiprocessing import cpu_count, Manager
 import sys
 
 #sys.path.append(sys.path[0][:-7])
 
-from multithr import Process 
+from concurrent.futures import ProcessPoolExecutor, wait
 
 def main():
-    import sys
     logging.basicConfig(format="%(asctime)s %(levelname)s | %(message)s", level=logging.DEBUG)
 
     ip = input("ip: ") or "127.0.0.1"
@@ -25,7 +24,7 @@ class RPC(rpyc.Service):
         logging.debug(f"RPC.__init__(self)")
         logging.info("new RPC client")
 
-        self.listener = None
+        self.listen = False
 
         self.ip = ip
         self.port = port
@@ -40,6 +39,8 @@ class RPC(rpyc.Service):
         self.keep_background = keep_background
 
         self.__threads = cpu_count()
+
+        self._manager = Manager()
 
     def __enter__(self):
         self.open()
@@ -61,7 +62,9 @@ class RPC(rpyc.Service):
         self.server.SYNC_REQUEST_TIMEOUT = self.max_timeout
         self.server.root.set_threads(self.__threads)
         self.server.root.set_run(self.run, self.run_parall)
-        #self.server.root.run_run()
+
+        self.listen = True
+        #self.server.root.run_parall()
         print("Connected to the server")
 
     def close(self):
@@ -75,27 +78,33 @@ class RPC(rpyc.Service):
 
     def run(self, funct, *args, **kwargs):
         print("RPC.run")
-        return import_function(funct)(*args, **kwargs)
+        self.listen = False
+
+        result = import_function(funct)(*args, **kwargs)
+
+        self.listen = True
+
+        return result
 
     def run_parall(self, funct, args):
         print("RPC.run_parall")
-        procs = []
+        self.listen = False
+
+        futures = []
         funct = import_function(funct)
 
-        for arg in args:
-            procs.append(Process(target=funct, args=arg))
-            procs[-1].start()
-        
-        print(f"Started {len(procs)} process")
+        print(f"Running a pool of {self.__threads} process")
+        with ProcessPoolExecutor(self.__threads) as executor:
+            for arg in args:
+                futures.append(executor.submit(funct, *arg))
 
-        for proc in procs: proc.join()
+            executor.shutdown()
 
         print("Done")
 
-        a = [p._tmp_result for p in procs]
-        print(a)
+        self.listen = True
 
-        return a 
+        return [future.result() for future in futures]
 
 if __name__ == "__main__":
     main()

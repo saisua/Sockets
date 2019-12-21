@@ -27,6 +27,7 @@ def main():
     cl.open()
 
     conn = cl.server.server
+    s = cl.server
 
     conn.serve_all()
 
