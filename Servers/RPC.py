@@ -12,8 +12,10 @@ from Languages.Server_lang import lang
 from collections.abc import Iterable
 from itertools import zip_longest
 from math import ceil
+from datetime import datetime
 
 def main():
+    from operator import attrgetter
     serv = RPC ('1',ip=input("ip > ")or"localhost",port=12412,start_on_connect=False)
     serv.to_run = cpu
     serv.args_parall = [[(0, 50000000), (50000000, 100000000), (100000000, 150000000), (150000000, 200000000), (200000000, 250000000), (250000000, 300000000), (300000000, 350000000), (350000000, 400000000)]]
@@ -22,17 +24,25 @@ def main():
 
     i = 1
     input("Press enter to run all clients\n")
+    bef = datetime.now()
+    
     while(i):
         serv.args_parall = serv.divide_threads([(50000000*i,50000000*(i+1)) for i in range(22)])
         #serv.args_per_client = [(50000000*i,50000000*(i+1)) for i in range(10)]
         serv.run_parall()
         print(serv._clients)
         
-        i=input("Press enter to stop running all clients\n")
-    
-    input("Press enter to finish\n")
+        i=False #input("Press enter to stop running all clients\n")
 
-    print(serv.result)
+    while(not all(map(attrgetter("ready"), serv._result))): time.sleep(.5)
+    tim = datetime.now()-bef
+    #input("Press enter to finish\n")
+
+    res = RPC.flatten(serv.result)
+    print(res)
+    print("\n\nResult:")
+    print(sum(res))
+    print(f"\nJob ended in {tim.total_seconds()} seconds")
 
     exit(0)
 
@@ -223,6 +233,17 @@ class RPC(rpyc.Service):
     args_per_client = property(get_args_per_client,set_args_per_client)
     args_parall = property(get_args_parall,set_args_parall)
     result = property(result_async_values)
+
+    @staticmethod
+    def flatten(l):
+        result = []
+        for level in l:
+            if(isinstance(level, Iterable)):
+                result.extend(level)
+            else:
+                result.append(level)
+        return result
+                
 
 class External_list(list):
     def __init__(self, iterable=[]):
