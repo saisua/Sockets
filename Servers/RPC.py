@@ -21,9 +21,10 @@ def main():
     a.start()
 
     input("Press enter to run all clients\n")
-    #serv.args_parall = serv.divide_threads([(50000000*i,50000000*(i+1)) for i in range(10)])
+    serv.args_parall = serv.divide_threads([(50000000*i,50000000*(i+1)) for i in range(22)])
     #serv.args_per_client = [(50000000*i,50000000*(i+1)) for i in range(10)]
     serv.run_parall()
+    print(serv._clients)
     
     input("Press enter to finish\n")
 
@@ -64,8 +65,8 @@ class RPC(rpyc.Service):
 
         self._socket = None
 
-        self._run = None
-        self._run_parall = None
+        self._run = []
+        self._run_parall = []
 
         self._to_run = None
 
@@ -93,62 +94,68 @@ class RPC(rpyc.Service):
         print(f"Open server ({self._socket}) in \n{self.ip}:{self.port}")
 
     def on_connect(self, conn):
-        self.__client_num = len(self._clients)
-        self.client_start.append(self.default_start)
-        self.client_threads.append(0)
-
-        self._clients.append(self)
+        self._clients.append(conn)
         
-        print(f"New client (number {self.__client_num})")
+        print(f"New client {len(self._clients)} connected")
         return super().on_connect(conn)
 
-    def on_disconnect(self, _):
-        self._clients.remove(self)
-        for obj in self._clients:
-            obj._set_client_num()
+    def on_disconnect(self, conn):
+        index = self._clients.index(conn)
+        self._clients.pop(index)
+        self._run.pop(index)
+        self._run_parall.pop(index)
+        self.client_threads.pop(index)
 
     def exposed_set_threads(self, threads:int):
-        self.client_threads[self.__client_num] = threads
-        print(f"Client {self.__client_num} has {threads} threads")
+        self.client_threads.append(threads)
+        print(f"New client {len(self._clients)} has {threads} threads")
 
     def exposed_set_run(self, run_funct, run_parall=None):
-        self._run = run_funct
-        self._run_parall = run_parall
+        self._run.append(run_funct)
+        self._run_parall.append(run_parall)
 
-    def exposed_run_run(self):
+    def exposed_run_run(self, client:int=0):
         if(self._run is None): return -1
-  
-        run = rpyc.async_(self._run)
+
+        if(client >= 0):
+            run = rpyc.async_(self._run[client])
         
-        if(self._args_per_client is None): 
-            future = run(self.to_run, *self._args)
+            if(self._args_per_client is None): 
+                future = run(self.to_run, *self._args)
+            else:
+                future = run(self.to_run, *self._args_per_client[self.__client_num])
+
+            self._result.append(future)
         else:
-            future = run(self.to_run, *self._args_per_client[self.__client_num])
+            for num, run in enumerate(self._run):
+                run = rpyc.async_(run)
+        
+                if(self._args_per_client is None): 
+                    future = run(self.to_run, *self._args)
+                else:
+                    future = run(self.to_run, *self._args_per_client[num])
+
+                self._result.append(future)
 
         return future
 
     def exposed_run_parall(self):
         if(self._run_parall is None): return -1
 
-        run = rpyc.async_(self._run_parall) # In a var, as asked in the docs
-        #run = self._run_parall
+        for num, run in enumerate(self._run_parall):
+            print(run)
+            run = rpyc.async_(run) # In a var, as asked in the docs
 
-        future = run(self.to_run, self.args_parall[self.__client_num])
-        self._result.append(future)
-
-        #future.wait()
-
-        return future
+            future = run(self.to_run, self.args_parall[num])
+            self._result.append(future)
+    
 
 
-    def run(self):
-        for obj in self._clients:
-            obj.exposed_run_run()
+    def run(self, client:int=0):
+        self.exposed_run_run(client)
 
     def run_parall(self):
-        for obj in self._clients:
-            obj.exposed_run_parall()
-
+        self.exposed_run_parall()
 
     def result_async_values(self):
         result = []
@@ -190,33 +197,22 @@ class RPC(rpyc.Service):
         return self._to_run
     def set_to_run(self, new_to_run):
         self._to_run = export_function(new_to_run)
-        
-        for obj in self._clients:
-            obj._to_run = self._to_run
 
     def get_args(self):
         return self._args
     def set_args(self, new_args):
         self._args = new_args
-
-        for obj in self._clients:
-            obj._args = new_args
                 
     def get_args_per_client(self):
         return self._args_per_client
     def set_args_per_client(self, new_args_pc):
         self._args_per_client = new_args_pc
 
-        for obj in self._clients:
-            obj._args_per_client = new_args_pc
-
     def get_args_parall(self):
         return self._args_parall
     def set_args_parall(self, new_args_parall):
         self._args_parall = new_args_parall
-
-        for obj in self._clients:
-            obj._args_parall = self._args_parall
+        
 
     to_run = property(get_to_run, set_to_run)
     args = property(get_args,set_args)
