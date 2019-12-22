@@ -18,7 +18,8 @@ def main():
 
 class RPC(rpyc.Service):
     def __init__(self, ip:str="localhost", port:int=12412, order_dict:dict={},
-                    *, max_timeout=600, keepalive:bool=True, keep_background:bool=True):
+                    *, max_timeout=600, keepalive:bool=True, keep_background:bool=True,
+                     max_threads:int=None):
         print(f"RPC.__init__(self)")
         print("new RPC client")
 
@@ -34,7 +35,7 @@ class RPC(rpyc.Service):
 
         self.keep_background = keep_background
 
-        self.__threads = cpu_count()
+        self.__threads = max_threads or cpu_count()
 
         self._manager = Manager()
 
