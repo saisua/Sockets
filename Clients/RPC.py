@@ -38,7 +38,6 @@ class RPC(rpyc.Service):
 
         self._manager = Manager()
 
-        self._executor = ProcessPoolExecutor(self.__threads)
         
     def __enter__(self):
         self.open()
