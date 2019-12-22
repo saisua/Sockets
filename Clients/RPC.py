@@ -94,15 +94,16 @@ class RPC(rpyc.Service):
             p.start()
 
         for proc in procs: proc.join()
+
+        print("Done")
         
-        return futures
+        return list(futures)
 
 def run_proc(funct_bin, arg, futures):
-        print("Start")
+        print("| Start Thread")
         funct = import_function(funct_bin)
-        print("imported")
         futures.append(funct(*arg))
+        print("+ Thread ended")
 
 if __name__ == "__main__":
     main()
-else: print("Imported RPC (client)")

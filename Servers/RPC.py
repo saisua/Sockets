@@ -20,11 +20,15 @@ def main():
     a = Process(target=serv.open)
     a.start()
 
+    i = 1
     input("Press enter to run all clients\n")
-    serv.args_parall = serv.divide_threads([(50000000*i,50000000*(i+1)) for i in range(22)])
-    #serv.args_per_client = [(50000000*i,50000000*(i+1)) for i in range(10)]
-    serv.run_parall()
-    print(serv._clients)
+    while(i):
+        serv.args_parall = serv.divide_threads([(50000000*i,50000000*(i+1)) for i in range(22)])
+        #serv.args_per_client = [(50000000*i,50000000*(i+1)) for i in range(10)]
+        serv.run_parall()
+        print(serv._clients)
+        
+        i=input("Press enter to stop running all clients\n")
     
     input("Press enter to finish\n")
 
@@ -228,4 +232,3 @@ class External_list(list):
 
 if __name__ == "__main__":
     main()
-else: print("Imported RPC Server")

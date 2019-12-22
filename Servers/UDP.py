@@ -27,4 +27,3 @@ class UDP():
 
 if __name__ == "__main__":
     main()
-else: print("Imported UDP Server")

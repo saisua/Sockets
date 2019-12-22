@@ -178,4 +178,3 @@ class TCP():
 
 if __name__ == "__main__":
     main()
-else: print("Imported TCP (client)")
